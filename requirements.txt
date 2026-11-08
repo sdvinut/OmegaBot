@@ -1,0 +1,12 @@
+# Зависимости для сервера (Raspberry Pi):
+smbus2>=0.4.0
+
+# Камера на Raspberry Pi:
+# На современных версиях Raspberry Pi OS библиотека Picamera2 уже предустановлена.
+# При необходимости можно установить системный пакет:
+#   sudo apt update && sudo apt install python3-picamera2
+# Либо через OpenCV:
+#   pip install opencv-python-headless
+
+# Зависимости для клиентского ПК (компьютер оператора):
+Pillow>=9.0.0

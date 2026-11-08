@@ -1,0 +1,14 @@
+[Unit]
+Description=OmegaBot Raspberry Pi Control & Camera Streaming Server
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/OmegaBot
+ExecStart=/usr/bin/python3 /home/pi/OmegaBot/raspberry_server.py --port 5000 --video-port 5001 --i2c-bus 1 --address 0x08
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
