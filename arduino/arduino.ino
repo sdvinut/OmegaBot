@@ -2,50 +2,37 @@
 
 constexpr uint8_t I2C_ADDRESS = 0x08;
 
-// Выводы управления моторами.
-// Управление осуществляется разностью напряжений на контактах: V_мотора = V(PIN_A) - V(PIN_B).
-// Пины не разделяются на "ШИМ" и "направление" — оба вывода управляются через analogWrite.
-constexpr uint8_t LEFT_PIN_A = 7;
-constexpr uint8_t LEFT_PIN_B = 6;
-constexpr uint8_t RIGHT_PIN_A = 4;
-constexpr uint8_t RIGHT_PIN_B = 5;
-
-// Таймаут безопасности (Watchdog): автоматическая остановка моторов,
-// если от Raspberry Pi не поступало команд дольше WATCHDOG_TIMEOUT_MS миллисекунд.
-constexpr unsigned long WATCHDOG_TIMEOUT_MS = 600;
-volatile unsigned long lastCommandTime = 0;
-volatile bool isMoving = false;
+// Выводы управления моторами: ШИМ (скорость) + Направление (DIR / IN2)
+constexpr uint8_t LEFT_PWM = 6;
+constexpr uint8_t LEFT_IN2 = 7;
+constexpr uint8_t RIGHT_IN2 = 4;
+constexpr uint8_t RIGHT_PWM = 5;
 
 void stopMotors() {
-  analogWrite(LEFT_PIN_A, 0);
-  analogWrite(LEFT_PIN_B, 0);
-  analogWrite(RIGHT_PIN_A, 0);
-  analogWrite(RIGHT_PIN_B, 0);
-  isMoving = false;
+  analogWrite(LEFT_PWM, 0);
+  analogWrite(RIGHT_PWM, 0);
+  digitalWrite(LEFT_IN2, LOW);
+  digitalWrite(RIGHT_IN2, LOW);
 }
 
-void setMotor(uint8_t pinA, uint8_t pinB, int speed) {
-  // Пересчет скорости (-100..100%) в амплитуду напряжения ШИМ (0..255)
-  const uint8_t pwm = static_cast<uint8_t>(abs(speed) * 255 / 100);
-
-  if (speed > 0) {
-    // Движение вперед: разность потенциалов V(A) - V(B) = pwm - 0 = +pwm
-    analogWrite(pinA, pwm);
-    analogWrite(pinB, 0);
-  } else if (speed < 0) {
-    // Движение назад: разность потенциалов V(A) - V(B) = 0 - pwm = -pwm
-    analogWrite(pinA, 0);
-    analogWrite(pinB, pwm);
+void setMotor(uint8_t pwmPin, uint8_t input2Pin, int speed, uint8_t pwm) {
+  if (speed == 0) {
+    analogWrite(pwmPin, 0);
+    digitalWrite(input2Pin, LOW);
+  } else if (speed > 0) {
+    digitalWrite(input2Pin, HIGH);
+    analogWrite(pwmPin, 255 - pwm);
   } else {
-    // Остановка: разность потенциалов V(A) - V(B) = 0 - 0 = 0
-    analogWrite(pinA, 0);
-    analogWrite(pinB, 0);
+    digitalWrite(input2Pin, LOW);
+    analogWrite(pwmPin, pwm);
   }
 }
 
 void setMotorsSpeed(int leftSpeed, int rightSpeed) {
-  setMotor(LEFT_PIN_A, LEFT_PIN_B, leftSpeed);
-  setMotor(RIGHT_PIN_A, RIGHT_PIN_B, rightSpeed);
+  const uint8_t leftPwm = static_cast<uint8_t>(abs(leftSpeed) * 255 / 100);
+  const uint8_t rightPwm = static_cast<uint8_t>(abs(rightSpeed) * 255 / 100);
+  setMotor(LEFT_PWM, LEFT_IN2, leftSpeed, leftPwm);
+  setMotor(RIGHT_PWM, RIGHT_IN2, rightSpeed, rightPwm);
 }
 
 bool validSpeed(long speed) {
@@ -74,8 +61,6 @@ void receiveCommand(int) {
   if (sscanf(command, "DRIVE %d %d %c", &leftSpeed, &rightSpeed, &extra) == 2 &&
       validSpeed(leftSpeed) && validSpeed(rightSpeed)) {
     setMotorsSpeed(leftSpeed, rightSpeed);
-    lastCommandTime = millis();
-    isMoving = (leftSpeed != 0 || rightSpeed != 0);
     return;
   }
 
@@ -84,17 +69,15 @@ void receiveCommand(int) {
     const long speed = strtol(command + 3, &end, 10);
     if (*end == '\0' && validSpeed(speed)) {
       setMotorsSpeed(static_cast<int>(speed), static_cast<int>(speed));
-      lastCommandTime = millis();
-      isMoving = (speed != 0);
     }
   }
 }
 
 void setup() {
-  pinMode(LEFT_PIN_A, OUTPUT);
-  pinMode(LEFT_PIN_B, OUTPUT);
-  pinMode(RIGHT_PIN_A, OUTPUT);
-  pinMode(RIGHT_PIN_B, OUTPUT);
+  pinMode(LEFT_PWM, OUTPUT);
+  pinMode(LEFT_IN2, OUTPUT);
+  pinMode(RIGHT_PWM, OUTPUT);
+  pinMode(RIGHT_IN2, OUTPUT);
   stopMotors();
 
   Wire.begin(I2C_ADDRESS);
@@ -102,9 +85,4 @@ void setup() {
 }
 
 void loop() {
-  // Аппаратный сторожевой таймер безопасности (Failsafe Watchdog):
-  // Если связь прервалась во время движения, моторы гарантированно глушатся.
-  if (isMoving && (millis() - lastCommandTime > WATCHDOG_TIMEOUT_MS)) {
-    stopMotors();
-  }
 }
