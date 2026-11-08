@@ -115,7 +115,7 @@ class ControllerApp:
         )
 
         self.btn_connect = tk.Button(connection_frame, text="Подключиться", bg="#d9ead3", command=self.toggle_connection)
-        self.btn_connect.grid(row=4, column=0, columnspan=2, fill="x", pady=2)
+        self.btn_connect.grid(row=4, column=0, columnspan=2, sticky="ew", pady=2)
 
         # Регулятор скорости
         speed_frame = tk.LabelFrame(right_panel, text="Скорость (PWM %)", padx=8, pady=6)
